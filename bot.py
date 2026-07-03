@@ -1,5 +1,9 @@
-import re
 import os
+import re
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -10,8 +14,52 @@ from telethon.sessions import StringSession
 
 load_dotenv()
 
-api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
+
+def start_health_server():
+    port = int(os.getenv("PORT", "8080"))
+
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path in ("/", "/health"):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"ok")
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format, *args):
+            return
+
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    print(f"Health server listening on port {port}")
+    return server
+
+
+def get_required_env(name):
+    value = os.getenv(name)
+    if value:
+        return value
+    return None
+
+
+api_id_value = get_required_env("API_ID")
+api_hash = get_required_env("API_HASH")
+session_string = get_required_env("SESSION")
+
+if not api_id_value or not api_hash or not session_string:
+    print("Missing Telegram environment variables. The bot will stay up for health checks until they are configured.")
+    start_health_server()
+    while True:
+        time.sleep(60)
+
+try:
+    api_id = int(api_id_value)
+except ValueError as exc:
+    raise RuntimeError("API_ID must be an integer") from exc
 
 CHANNEL = "freelance_ethio"
 
@@ -58,7 +106,7 @@ BLOCKED_KEYWORDS = [
 
 ]
 
-client = TelegramClient(StringSession(os.getenv("SESSION")), api_id, api_hash)
+client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
 
 def normalize_text(text):
