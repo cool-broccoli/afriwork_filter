@@ -1,6 +1,6 @@
 # Afriwork Filter
 
-A small bot for filtering content in the Afriwork project.
+A small user bot for filtering content in the Afriwork project.
 
 ## Requirements
 
